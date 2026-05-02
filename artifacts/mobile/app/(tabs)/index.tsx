@@ -14,7 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CalendarGrid } from '@/components/CalendarGrid';
 import { useCycle } from '@/context/CycleContext';
 import { useColors } from '@/hooks/useColors';
-import { DayInfo, addDays, parseLocalDate } from '@/utils/cycleCalculations';
+import {
+  DayInfo,
+  PregnancyTone,
+  addDays,
+  getPregnancyChance,
+  parseLocalDate,
+} from '@/utils/cycleCalculations';
 
 const MONTH_SHORT_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -50,6 +56,13 @@ export default function CalendarScreen() {
   const [month, setMonth] = useState(now.getMonth());
 
   const [sheet, setSheet] = useState<{ date: string; info: DayInfo } | null>(null);
+
+  const sheetChance = useMemo(
+    () => sheet && prediction
+      ? getPregnancyChance(sheet.date, cycles, prediction, avgCycleLength, avgPeriodLength)
+      : null,
+    [sheet, cycles, prediction, avgCycleLength, avgPeriodLength],
+  );
 
   const sortedCyclesDesc = useMemo(
     () => [...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate)),
@@ -239,6 +252,37 @@ export default function CalendarScreen() {
               What would you like to do?
             </Text>
 
+            {sheetChance && (
+              <View
+                style={[
+                  styles.modalChanceRow,
+                  {
+                    backgroundColor: chanceTint(sheetChance.tone, colors),
+                    borderColor: chanceBorder(sheetChance.tone, colors),
+                  },
+                ]}
+              >
+                <View style={styles.modalChanceText}>
+                  <Text style={[styles.modalChanceLabel, { color: colors.mutedForeground }]}>
+                    Chance of conception
+                  </Text>
+                  <Text style={[styles.modalChanceValue, { color: colors.foreground }]}>
+                    {sheetChance.label}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.modalChanceBadge,
+                    { backgroundColor: chanceColor(sheetChance.tone, colors) },
+                  ]}
+                >
+                  <Text style={styles.modalChanceBadgeText}>
+                    {sheetChance.percent}%
+                  </Text>
+                </View>
+              </View>
+            )}
+
             <View style={styles.modalActions}>
               {sheetActions.map((a, i) => (
                 <TouchableOpacity
@@ -282,6 +326,33 @@ export default function CalendarScreen() {
       )}
     </View>
   );
+}
+
+function chanceColor(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
+  switch (tone) {
+    case 'peak': return colors.ovulation;
+    case 'high': return colors.fertile;
+    case 'moderate': return colors.fertile;
+    default: return colors.mutedForeground;
+  }
+}
+
+function chanceTint(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
+  switch (tone) {
+    case 'peak': return colors.ovulation + '14';
+    case 'high': return colors.fertile + '14';
+    case 'moderate': return colors.fertile + '0E';
+    default: return colors.muted + '40';
+  }
+}
+
+function chanceBorder(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
+  switch (tone) {
+    case 'peak': return colors.ovulation + '50';
+    case 'high': return colors.fertile + '50';
+    case 'moderate': return colors.fertile + '30';
+    default: return colors.border;
+  }
 }
 
 function LegendItem({ color, label }: { color: string; label: string }) {
@@ -357,6 +428,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 4,
     zIndex: 1,
+  },
+  modalChanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  modalChanceText: { flex: 1, gap: 2 },
+  modalChanceLabel: {
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  modalChanceValue: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  modalChanceBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  modalChanceBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
   },
   modalTitle: {
     fontSize: 20,

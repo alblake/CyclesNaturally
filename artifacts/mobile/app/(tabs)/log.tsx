@@ -19,6 +19,8 @@ import {
   MAX_PERIOD_LENGTH,
   MIN_CYCLE_LENGTH,
   MIN_PERIOD_LENGTH,
+  PregnancyTone,
+  getPregnancyChance,
   parseLocalDate,
   todayStr,
 } from '@/utils/cycleCalculations';
@@ -44,6 +46,8 @@ export default function LogScreen() {
     endPeriod,
     deleteCycle,
     prediction,
+    avgCycleLength,
+    avgPeriodLength,
     tempEntries,
     setTemp,
     removeTemp,
@@ -64,6 +68,7 @@ export default function LogScreen() {
 
   const today = todayStr();
   const todayTemp = tempEntries[today];
+  const todayChance = getPregnancyChance(today, cycles, prediction, avgCycleLength, avgPeriodLength);
 
   const [draftTemp, setDraftTemp] = useState<number>(todayTemp ?? DEFAULT_TEMP);
   const [editingTemp, setEditingTemp] = useState(todayTemp === undefined);
@@ -197,6 +202,46 @@ export default function LogScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Pregnancy chance card */}
+      {prediction && (
+        <View
+          style={[
+            styles.chanceCard,
+            {
+              backgroundColor: chanceTint(todayChance.tone, colors),
+              borderColor: chanceBorder(todayChance.tone, colors),
+            },
+          ]}
+        >
+          <View style={styles.chanceHeader}>
+            <View style={styles.chanceHeaderText}>
+              <Text style={[styles.tempLabel, { color: colors.mutedForeground }]}>
+                CHANCE OF CONCEPTION TODAY
+              </Text>
+              <Text style={[styles.tempTitle, { color: colors.foreground }]}>
+                {todayChance.label}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.chanceBadge,
+                { backgroundColor: chanceColor(todayChance.tone, colors) },
+              ]}
+            >
+              <Text style={styles.chanceBadgeText}>
+                {todayChance.percent}%
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.chanceDescription, { color: colors.mutedForeground }]}>
+            {chanceDescription(todayChance.tone)}
+          </Text>
+          <Text style={[styles.chanceFootnote, { color: colors.mutedForeground }]}>
+            Per-act estimate based on Wilcox et al. (1995). Not contraception advice.
+          </Text>
+        </View>
+      )}
 
       {/* Temperature card */}
       <View style={[styles.tempCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -438,6 +483,53 @@ export default function LogScreen() {
       )}
     </ScrollView>
   );
+}
+
+function chanceColor(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
+  switch (tone) {
+    case 'peak': return colors.ovulation;
+    case 'high': return colors.fertile;
+    case 'moderate': return colors.fertile;
+    case 'low': return colors.mutedForeground;
+    case 'verylow':
+    default: return colors.mutedForeground;
+  }
+}
+
+function chanceTint(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
+  switch (tone) {
+    case 'peak': return colors.ovulation + '14';
+    case 'high': return colors.fertile + '14';
+    case 'moderate': return colors.fertile + '0E';
+    case 'low': return colors.card;
+    case 'verylow':
+    default: return colors.card;
+  }
+}
+
+function chanceBorder(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
+  switch (tone) {
+    case 'peak': return colors.ovulation + '50';
+    case 'high': return colors.fertile + '50';
+    case 'moderate': return colors.fertile + '30';
+    default: return colors.border;
+  }
+}
+
+function chanceDescription(tone: PregnancyTone): string {
+  switch (tone) {
+    case 'peak':
+      return 'You\u2019re at or very near ovulation. This is the highest-fertility day of your cycle.';
+    case 'high':
+      return 'You\u2019re close to ovulation. Conception is significantly more likely on this day.';
+    case 'moderate':
+      return 'You\u2019re in the fertile window \u2014 sperm can survive long enough to meet the egg.';
+    case 'low':
+      return 'Conception is unlikely today, but not impossible. Sperm can survive a few days.';
+    case 'verylow':
+    default:
+      return 'Conception is very unlikely today, well outside your fertile window.';
+  }
 }
 
 function SettingStepper({
@@ -741,6 +833,43 @@ const styles = StyleSheet.create({
   predBadgeText: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
+  },
+  chanceCard: {
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 16,
+  },
+  chanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chanceHeaderText: { flex: 1, gap: 2 },
+  chanceBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  chanceBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+  },
+  chanceDescription: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 19,
+  },
+  chanceFootnote: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    fontStyle: 'italic',
+    lineHeight: 16,
+    marginTop: 4,
   },
   settingsCard: {
     marginHorizontal: 16,

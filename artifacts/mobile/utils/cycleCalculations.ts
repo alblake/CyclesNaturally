@@ -162,6 +162,78 @@ export function getDayInfo(
   return { status: 'normal', cycleDay: null, isPast, isToday, isFuture };
 }
 
+export type PregnancyTone = 'verylow' | 'low' | 'moderate' | 'high' | 'peak';
+
+export interface PregnancyChance {
+  percent: number;
+  label: string;
+  tone: PregnancyTone;
+}
+
+/**
+ * Returns the chance of conception (per act of unprotected sex) for a given day.
+ * Probabilities are based on the Wilcox et al. 1995 NEJM study, which measured
+ * day-specific conception probabilities relative to ovulation.
+ */
+export function getPregnancyChance(
+  dateStr: string,
+  cycles: CycleEntry[],
+  prediction: CyclePrediction | null,
+  avgCycleLength: number,
+  avgPeriodLength: number,
+): PregnancyChance {
+  if (!prediction) {
+    return { percent: 0, label: 'Unknown', tone: 'verylow' };
+  }
+
+  // During a logged period -> very low (although not zero for short cycles,
+  // sperm survive ~5 days and ovulation is typically far away from menses).
+  for (const cycle of cycles) {
+    const end = cycle.endDate || addDays(cycle.startDate, avgPeriodLength - 1);
+    if (dateStr >= cycle.startDate && dateStr <= end) {
+      return chanceFromPercent(1);
+    }
+  }
+
+  // Find the nearest predicted ovulation (current cycle or +/- a few cycles).
+  let nearestOv = prediction.ovulationDate;
+  let minAbs = Math.abs(diffDays(dateStr, nearestOv));
+  for (let i = -2; i <= 6; i++) {
+    if (i === 0) continue;
+    const candidate = addDays(prediction.ovulationDate, avgCycleLength * i);
+    const abs = Math.abs(diffDays(dateStr, candidate));
+    if (abs < minAbs) {
+      minAbs = abs;
+      nearestOv = candidate;
+    }
+  }
+
+  const days = diffDays(dateStr, nearestOv); // negative = before ovulation
+
+  // Per-act conception probabilities (%) by day relative to ovulation.
+  const table: Record<number, number> = {
+    [-6]: 4,
+    [-5]: 10,
+    [-4]: 16,
+    [-3]: 14,
+    [-2]: 27,
+    [-1]: 31,
+    [0]: 33,
+    [1]: 12,
+    [2]: 5,
+  };
+
+  return chanceFromPercent(table[days] ?? 1);
+}
+
+function chanceFromPercent(percent: number): PregnancyChance {
+  if (percent >= 30) return { percent, label: 'Peak', tone: 'peak' };
+  if (percent >= 20) return { percent, label: 'High', tone: 'high' };
+  if (percent >= 10) return { percent, label: 'Moderate', tone: 'moderate' };
+  if (percent >= 4) return { percent, label: 'Low', tone: 'low' };
+  return { percent, label: 'Very low', tone: 'verylow' };
+}
+
 export type TempEntries = Record<string, number>;
 
 export interface TempAnalysis {
