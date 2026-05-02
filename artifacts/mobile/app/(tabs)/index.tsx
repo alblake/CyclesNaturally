@@ -2,9 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
 import {
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -136,6 +134,7 @@ export default function CalendarScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
   return (
+    <View style={[styles.rootContainer, { backgroundColor: colors.background }]}>
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 34 + 84 : insets.bottom + 100 }}
@@ -160,72 +159,6 @@ export default function CalendarScreen() {
       <Text style={[styles.tapHint, { color: colors.mutedForeground }]}>
         Tap any day to log period start, set end date, or delete
       </Text>
-
-      <Modal
-        visible={sheet !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSheet(null)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setSheet(null)}
-        >
-          <Pressable
-            style={[
-              styles.modalSheet,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={e => e.stopPropagation()}
-          >
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              {sheet ? fmtDateLong(sheet.date) : ''}
-            </Text>
-            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
-              What would you like to do?
-            </Text>
-
-            <View style={styles.modalActions}>
-              {sheetActions.map((a, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    styles.modalBtn,
-                    {
-                      backgroundColor: a.destructive
-                        ? colors.period + '14'
-                        : colors.primary,
-                      borderColor: a.destructive ? colors.period + '40' : 'transparent',
-                      borderWidth: a.destructive ? 1 : 0,
-                    },
-                  ]}
-                  onPress={() => handleSheetAction(a.onPress)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.modalBtnText,
-                      { color: a.destructive ? colors.period : '#FFFFFF' },
-                    ]}
-                  >
-                    {a.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-              <TouchableOpacity
-                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
-                onPress={() => setSheet(null)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.modalCancelText, { color: colors.foreground }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <View style={styles.legend}>
         <LegendItem color={colors.period} label="Period" />
@@ -285,6 +218,69 @@ export default function CalendarScreen() {
         </View>
       )}
     </ScrollView>
+
+      {sheet !== null && (
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setSheet(null)}
+          />
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              {fmtDateLong(sheet.date)}
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+              What would you like to do?
+            </Text>
+
+            <View style={styles.modalActions}>
+              {sheetActions.map((a, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[
+                    styles.modalBtn,
+                    {
+                      backgroundColor: a.destructive
+                        ? colors.period + '14'
+                        : colors.primary,
+                      borderColor: a.destructive ? colors.period + '40' : 'transparent',
+                      borderWidth: a.destructive ? 1 : 0,
+                    },
+                  ]}
+                  onPress={() => handleSheetAction(a.onPress)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.modalBtnText,
+                      { color: a.destructive ? colors.period : '#FFFFFF' },
+                    ]}
+                  >
+                    {a.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                onPress={() => setSheet(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modalCancelText, { color: colors.foreground }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -314,6 +310,7 @@ function SummaryItem({ icon, label, value, color }: {
 }
 
 const styles = StyleSheet.create({
+  rootContainer: { flex: 1, position: 'relative' },
   container: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -341,11 +338,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
   },
   modalBackdrop: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    zIndex: 100,
   },
   modalSheet: {
     width: '100%',
@@ -354,6 +356,7 @@ const styles = StyleSheet.create({
     padding: 22,
     borderWidth: 1,
     gap: 4,
+    zIndex: 1,
   },
   modalTitle: {
     fontSize: 20,
