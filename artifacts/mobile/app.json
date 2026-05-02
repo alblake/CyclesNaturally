@@ -14,7 +14,15 @@
       "backgroundColor": "#E8748A"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Cycle Tracker reads your basal body temperature from Apple Health to automatically log it each morning and improve your fertility predictions.",
+        "NSHealthUpdateUsageDescription": "Cycle Tracker writes basal body temperature readings you log here back to Apple Health so all your health data stays in one place."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
+      }
     },
     "android": {},
     "web": {

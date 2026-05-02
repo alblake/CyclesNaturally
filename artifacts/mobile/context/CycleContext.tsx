@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import {
+  fetchBodyTemperatureSamples,
+  getHealthAvailability,
+  HealthAvailability,
+  requestHealthAuthorization,
+  writeBodyTemperature,
+} from '@/services/healthKit';
 import {
   CycleEntry,
   CyclePrediction,
@@ -22,10 +29,16 @@ import {
 const STORAGE_KEY = '@cycle_tracker_v1';
 const TEMP_STORAGE_KEY = '@cycle_tracker_temps_v1';
 const SETTINGS_STORAGE_KEY = '@cycle_tracker_settings_v1';
+const HEALTH_STORAGE_KEY = '@cycle_tracker_health_v1';
 
 interface CycleSettings {
   userCycleLength: number;
   userPeriodLength: number;
+}
+
+interface HealthState {
+  connected: boolean;
+  lastSyncAt: number | null;
 }
 
 interface CycleContextType {
@@ -48,6 +61,15 @@ interface CycleContextType {
   tempEntries: TempEntries;
   setTemp: (date: string, tempF: number) => void;
   removeTemp: (date: string) => void;
+
+  healthAvailability: HealthAvailability;
+  healthConnected: boolean;
+  healthSyncing: boolean;
+  healthLastSyncAt: number | null;
+  healthError: string | null;
+  connectHealth: () => Promise<boolean>;
+  disconnectHealth: () => void;
+  syncFromHealth: () => Promise<number>;
 }
 
 const CycleContext = createContext<CycleContextType | null>(null);
@@ -67,12 +89,24 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
   });
   const [isLoading, setIsLoading] = useState(true);
 
+  const healthAvailability = getHealthAvailability();
+  const [health, setHealth] = useState<HealthState>({ connected: false, lastSyncAt: null });
+  const [healthSyncing, setHealthSyncing] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const tempEntriesRef = useRef<TempEntries>({});
+  tempEntriesRef.current = tempEntries;
+  const healthRef = useRef<HealthState>(health);
+  healthRef.current = health;
+  // Guards against concurrent syncs (avoids stale-closure issue with healthSyncing state).
+  const syncInFlightRef = useRef(false);
+
   useEffect(() => {
     Promise.all([
       AsyncStorage.getItem(STORAGE_KEY),
       AsyncStorage.getItem(TEMP_STORAGE_KEY),
       AsyncStorage.getItem(SETTINGS_STORAGE_KEY),
-    ]).then(([cyclesData, tempsData, settingsData]) => {
+      AsyncStorage.getItem(HEALTH_STORAGE_KEY),
+    ]).then(([cyclesData, tempsData, settingsData, healthData]) => {
       if (cyclesData) {
         try { setCycles(JSON.parse(cyclesData)); } catch {}
       }
@@ -93,6 +127,15 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
               MIN_PERIOD_LENGTH,
               MAX_PERIOD_LENGTH,
             ),
+          });
+        } catch {}
+      }
+      if (healthData) {
+        try {
+          const parsed = JSON.parse(healthData) as Partial<HealthState>;
+          setHealth({
+            connected: !!parsed.connected,
+            lastSyncAt: typeof parsed.lastSyncAt === 'number' ? parsed.lastSyncAt : null,
           });
         } catch {}
       }
@@ -178,12 +221,103 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
     [cycles, persistCycles],
   );
 
+  const persistHealth = useCallback((updated: HealthState) => {
+    setHealth(updated);
+    AsyncStorage.setItem(HEALTH_STORAGE_KEY, JSON.stringify(updated));
+  }, []);
+
   const setTemp = useCallback(
     (date: string, tempF: number) => {
+      const previous = tempEntries[date];
       persistTemps({ ...tempEntries, [date]: tempF });
+      // Mirror manual entries back to Apple Health, but only when the value
+      // actually changed. This prevents duplicate HealthKit samples when the
+      // user re-saves the same value or when a sync triggers an effective no-op.
+      if (
+        healthRef.current.connected &&
+        healthAvailability.supported &&
+        previous !== tempF
+      ) {
+        // Use 7am local time as the timestamp for the BBT reading.
+        const [y, m, d] = date.split('-').map(Number);
+        const when = new Date(y, (m ?? 1) - 1, d ?? 1, 7, 0, 0);
+        writeBodyTemperature(tempF, when).catch(() => {});
+      }
     },
-    [tempEntries, persistTemps],
+    [tempEntries, persistTemps, healthAvailability.supported],
   );
+
+  const syncFromHealth = useCallback(async (): Promise<number> => {
+    if (!healthRef.current.connected || !healthAvailability.supported) return 0;
+    if (syncInFlightRef.current) return 0; // Re-entrancy guard.
+    syncInFlightRef.current = true;
+    setHealthSyncing(true);
+    setHealthError(null);
+    try {
+      // Wider window on first connect (1 year) so we backfill historical BBT
+      // data; subsequent syncs only need to cover any missed days.
+      const isFirstSync = healthRef.current.lastSyncAt === null;
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - (isFirstSync ? 365 : 60));
+      const samples = await fetchBodyTemperatureSamples(start, end);
+      let added = 0;
+      // Use a functional state update so we don't clobber a manual setTemp
+      // that may have happened concurrently while sync was awaiting Health.
+      setTempEntries(prev => {
+        const merged: TempEntries = { ...prev };
+        for (const s of samples) {
+          // Don't overwrite values the user has already entered manually.
+          if (merged[s.date] === undefined) {
+            merged[s.date] = Math.round(s.tempF * 100) / 100;
+            added += 1;
+          }
+        }
+        if (added > 0) {
+          AsyncStorage.setItem(TEMP_STORAGE_KEY, JSON.stringify(merged));
+        }
+        return added > 0 ? merged : prev;
+      });
+      persistHealth({ connected: true, lastSyncAt: Date.now() });
+      return added;
+    } catch (e: any) {
+      setHealthError(e?.message || 'Sync failed');
+      return 0;
+    } finally {
+      syncInFlightRef.current = false;
+      setHealthSyncing(false);
+    }
+  }, [healthAvailability.supported, persistHealth]);
+
+  const connectHealth = useCallback(async (): Promise<boolean> => {
+    if (!healthAvailability.supported) {
+      setHealthError(healthAvailability.reason || 'Apple Health is not available.');
+      return false;
+    }
+    setHealthError(null);
+    const ok = await requestHealthAuthorization();
+    if (!ok) {
+      setHealthError('Permission was not granted. Open Settings → Privacy → Health to enable access.');
+      return false;
+    }
+    // The auto-sync useEffect below will fire once `health.connected` flips
+    // to true, so we don't kick off a second sync from here.
+    persistHealth({ connected: true, lastSyncAt: null });
+    return true;
+  }, [healthAvailability.supported, healthAvailability.reason, persistHealth]);
+
+  const disconnectHealth = useCallback(() => {
+    persistHealth({ connected: false, lastSyncAt: null });
+    setHealthError(null);
+  }, [persistHealth]);
+
+  // Auto-sync on mount when already connected.
+  useEffect(() => {
+    if (!isLoading && health.connected && healthAvailability.supported) {
+      syncFromHealth().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, health.connected, healthAvailability.supported]);
 
   const removeTemp = useCallback(
     (date: string) => {
@@ -230,6 +364,14 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
         tempEntries,
         setTemp,
         removeTemp,
+        healthAvailability,
+        healthConnected: health.connected,
+        healthSyncing,
+        healthLastSyncAt: health.lastSyncAt,
+        healthError,
+        connectHealth,
+        disconnectHealth,
+        syncFromHealth,
       }}
     >
       {children}

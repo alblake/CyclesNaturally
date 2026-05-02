@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -55,6 +56,14 @@ export default function LogScreen() {
     userPeriodLength,
     setUserCycleLength,
     setUserPeriodLength,
+    healthAvailability,
+    healthConnected,
+    healthSyncing,
+    healthLastSyncAt,
+    healthError,
+    connectHealth,
+    disconnectHealth,
+    syncFromHealth,
   } = useCycle();
 
   const adjustCycleLen = (delta: number) => {
@@ -402,6 +411,114 @@ export default function LogScreen() {
         </View>
       )}
 
+      {/* Apple Health card */}
+      <View style={[styles.healthCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.healthHeader}>
+          <View style={styles.healthHeaderText}>
+            <Text style={[styles.tempLabel, { color: colors.mutedForeground }]}>
+              APPLE HEALTH
+            </Text>
+            <Text style={[styles.tempTitle, { color: colors.foreground }]}>
+              {healthConnected ? 'Connected' : 'Auto-log your morning temp'}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.healthDot,
+              {
+                backgroundColor: healthConnected
+                  ? '#34C759'
+                  : healthAvailability.supported
+                    ? colors.mutedForeground
+                    : colors.border,
+              },
+            ]}
+          />
+        </View>
+
+        {!healthAvailability.supported && (
+          <Text style={[styles.healthDescription, { color: colors.mutedForeground }]}>
+            {healthAvailability.reason}
+          </Text>
+        )}
+
+        {healthAvailability.supported && !healthConnected && (
+          <Text style={[styles.healthDescription, { color: colors.mutedForeground }]}>
+            Pull your basal body temperature directly from Apple Health each morning. Readings from
+            connected thermometers and wearables sync automatically.
+          </Text>
+        )}
+
+        {healthConnected && (
+          <Text style={[styles.healthDescription, { color: colors.mutedForeground }]}>
+            {healthLastSyncAt
+              ? `Last synced ${formatRelativeTime(healthLastSyncAt)}.`
+              : 'Waiting for first sync\u2026'}
+            {' '}New temperatures from Apple Health will appear here automatically.
+          </Text>
+        )}
+
+        {healthError && (
+          <Text style={[styles.healthError, { color: colors.period }]}>
+            {healthError}
+          </Text>
+        )}
+
+        <View style={styles.healthActions}>
+          {healthAvailability.supported && !healthConnected && (
+            <TouchableOpacity
+              style={[styles.healthPrimaryBtn, { backgroundColor: colors.primary }]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                await connectHealth();
+              }}
+              activeOpacity={0.8}
+            >
+              <Feather name="heart" size={16} color="#FFFFFF" />
+              <Text style={styles.healthPrimaryBtnText}>Connect Apple Health</Text>
+            </TouchableOpacity>
+          )}
+
+          {healthConnected && (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.healthSecondaryBtn,
+                  { borderColor: colors.border, opacity: healthSyncing ? 0.5 : 1 },
+                ]}
+                onPress={async () => {
+                  if (healthSyncing) return;
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  const added = await syncFromHealth();
+                  if (added > 0) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }}
+                disabled={healthSyncing}
+                activeOpacity={0.8}
+              >
+                {healthSyncing
+                  ? <ActivityIndicator size="small" color={colors.foreground} />
+                  : <Feather name="refresh-cw" size={16} color={colors.foreground} />}
+                <Text style={[styles.healthSecondaryBtnText, { color: colors.foreground }]}>
+                  {healthSyncing ? 'Syncing\u2026' : 'Sync now'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.healthLinkBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  disconnectHealth();
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.healthLinkBtnText, { color: colors.mutedForeground }]}>
+                  Disconnect
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+
       {/* Cycle settings card */}
       <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.settingsHeader}>
@@ -483,6 +600,17 @@ export default function LogScreen() {
       )}
     </ScrollView>
   );
+}
+
+function formatRelativeTime(ts: number): string {
+  const diffMs = Date.now() - ts;
+  const min = Math.round(diffMs / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  return `${day}d ago`;
 }
 
 function chanceColor(tone: PregnancyTone, colors: ReturnType<typeof useColors>): string {
@@ -833,6 +961,72 @@ const styles = StyleSheet.create({
   predBadgeText: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
+  },
+  healthCard: {
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    gap: 12,
+    marginBottom: 16,
+  },
+  healthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  healthHeaderText: { flex: 1, gap: 2 },
+  healthDot: { width: 10, height: 10, borderRadius: 5 },
+  healthDescription: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 19,
+  },
+  healthError: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 17,
+  },
+  healthActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  healthPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 14,
+  },
+  healthPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  healthSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  healthSecondaryBtnText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  healthLinkBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
+  healthLinkBtnText: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
   },
   chanceCard: {
     marginHorizontal: 16,
