@@ -1,11 +1,32 @@
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import React, { useMemo, useState } from 'react';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CalendarGrid } from '@/components/CalendarGrid';
 import { useCycle } from '@/context/CycleContext';
 import { useColors } from '@/hooks/useColors';
+import { DayInfo, addDays, parseLocalDate } from '@/utils/cycleCalculations';
+
+const MONTH_SHORT_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+function fmtDateLong(dateStr: string): string {
+  const d = parseLocalDate(dateStr);
+  return `${MONTH_SHORT_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -15,11 +36,93 @@ const MONTH_NAMES = [
 export default function CalendarScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { prediction, avgCycleLength, activeCycle } = useCycle();
+  const {
+    cycles,
+    prediction,
+    avgCycleLength,
+    avgPeriodLength,
+    activeCycle,
+    startPeriod,
+    setCycleEnd,
+    deleteCycle,
+  } = useCycle();
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
+
+  const [sheet, setSheet] = useState<{ date: string; info: DayInfo } | null>(null);
+
+  const sortedCyclesDesc = useMemo(
+    () => [...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate)),
+    [cycles],
+  );
+
+  const handleDayPress = (dateStr: string, info: DayInfo) => {
+    if (info.isFuture) return;
+    Haptics.selectionAsync();
+    setSheet({ date: dateStr, info });
+  };
+
+  const sheetActions = useMemo(() => {
+    if (!sheet) return [];
+
+    const containingCycle =
+      sheet.info.status === 'period'
+        ? sortedCyclesDesc.find(c => {
+            const end = c.endDate || addDays(c.startDate, avgPeriodLength - 1);
+            return sheet.date >= c.startDate && sheet.date <= end;
+          })
+        : undefined;
+
+    const actions: {
+      label: string;
+      destructive?: boolean;
+      onPress: () => void;
+    }[] = [];
+
+    if (containingCycle) {
+      if (containingCycle.startDate === sheet.date) {
+        actions.push({
+          label: 'Delete this cycle',
+          destructive: true,
+          onPress: () => deleteCycle(containingCycle.id),
+        });
+      } else {
+        actions.push({
+          label: 'Set as period end',
+          onPress: () => setCycleEnd(containingCycle.id, sheet.date),
+        });
+        actions.push({
+          label: 'Delete this cycle',
+          destructive: true,
+          onPress: () => deleteCycle(containingCycle.id),
+        });
+      }
+    } else {
+      // Pick the most recent open cycle whose start is before this date
+      const openCycle = sortedCyclesDesc.find(
+        c => !c.endDate && c.startDate < sheet.date,
+      );
+      if (openCycle) {
+        actions.push({
+          label: 'Set as period end',
+          onPress: () => setCycleEnd(openCycle.id, sheet.date),
+        });
+      }
+      actions.push({
+        label: 'Mark as period start',
+        onPress: () => startPeriod(sheet.date),
+      });
+    }
+    return actions;
+  }, [sheet, sortedCyclesDesc, avgPeriodLength, deleteCycle, setCycleEnd, startPeriod]);
+
+  const handleSheetAction = (onPress: () => void) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+    setSheet(null);
+  };
 
   const prevMonth = () => {
     if (month === 0) { setYear(y => y - 1); setMonth(11); }
@@ -51,8 +154,78 @@ export default function CalendarScreen() {
       </View>
 
       <View style={[styles.calendarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <CalendarGrid year={year} month={month} />
+        <CalendarGrid year={year} month={month} onDayPress={handleDayPress} />
       </View>
+
+      <Text style={[styles.tapHint, { color: colors.mutedForeground }]}>
+        Tap any day to log period start, set end date, or delete
+      </Text>
+
+      <Modal
+        visible={sheet !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSheet(null)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setSheet(null)}
+        >
+          <Pressable
+            style={[
+              styles.modalSheet,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={e => e.stopPropagation()}
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              {sheet ? fmtDateLong(sheet.date) : ''}
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+              What would you like to do?
+            </Text>
+
+            <View style={styles.modalActions}>
+              {sheetActions.map((a, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[
+                    styles.modalBtn,
+                    {
+                      backgroundColor: a.destructive
+                        ? colors.period + '14'
+                        : colors.primary,
+                      borderColor: a.destructive ? colors.period + '40' : 'transparent',
+                      borderWidth: a.destructive ? 1 : 0,
+                    },
+                  ]}
+                  onPress={() => handleSheetAction(a.onPress)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.modalBtnText,
+                      { color: a.destructive ? colors.period : '#FFFFFF' },
+                    ]}
+                  >
+                    {a.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                onPress={() => setSheet(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modalCancelText, { color: colors.foreground }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <View style={styles.legend}>
         <LegendItem color={colors.period} label="Period" />
@@ -159,6 +332,62 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 12,
     borderWidth: 1,
+  },
+  tapHint: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    marginTop: 10,
+    marginHorizontal: 24,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalSheet: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 22,
+    padding: 22,
+    borderWidth: 1,
+    gap: 4,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 14,
+  },
+  modalActions: {
+    gap: 10,
+  },
+  modalBtn: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  modalCancelBtn: {
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
   },
   legend: {
     flexDirection: 'row',

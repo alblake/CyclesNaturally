@@ -25,6 +25,7 @@ interface CycleContextType {
   activeCycle: CycleEntry | null;
   startPeriod: (date?: string) => void;
   endPeriod: (date?: string) => void;
+  setCycleEnd: (id: string, endDate: string) => void;
   deleteCycle: (id: string) => void;
   getDayInfo: (dateStr: string) => DayInfo;
 
@@ -86,6 +87,16 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
     [cycles, persistCycles],
   );
 
+  const setCycleEnd = useCallback(
+    (id: string, endDate: string) => {
+      const cycle = cycles.find(c => c.id === id);
+      if (!cycle) return;
+      if (endDate < cycle.startDate) return;
+      persistCycles(cycles.map(c => (c.id === id ? { ...c, endDate } : c)));
+    },
+    [cycles, persistCycles],
+  );
+
   const deleteCycle = useCallback(
     (id: string) => {
       persistCycles(cycles.filter(c => c.id !== id));
@@ -135,6 +146,7 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
         activeCycle,
         startPeriod,
         endPeriod,
+        setCycleEnd,
         deleteCycle,
         getDayInfo: getDayInfoFn,
         tempEntries,
