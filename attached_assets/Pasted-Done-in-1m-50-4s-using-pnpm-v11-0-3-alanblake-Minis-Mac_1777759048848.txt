@@ -1,0 +1,54 @@
+Done in 1m 50.4s using pnpm v11.0.3
+alanblake@Minis-Mac-mini CyclesNaturally % eas --version
+eas-cli/18.9.1 darwin-arm64 node-v23.7.0
+alanblake@Minis-Mac-mini CyclesNaturally % cd artifacts/mobile
+alanblake@Minis-Mac-mini mobile % eas login
+ ›   ModuleLoadError: [MODULE_NOT_FOUND] require failed to load 
+ ›   /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5d3
+ ›   50c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-cli
+ ›   /build/commands/account/login.js: Cannot find module 'debug'
+ ›   Require stack:
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5
+ ›   d350c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-c
+ ›   li/build/log.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5
+ ›   d350c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-c
+ ›   li/build/commandUtils/context/contextUtils/findProjectDirAndVerifyProjectS
+ ›   etupAsync.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5
+ ›   d350c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-c
+ ›   li/build/commandUtils/context/DynamicProjectConfigContextField.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5
+ ›   d350c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-c
+ ›   li/build/commandUtils/EasCommand.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5
+ ›   d350c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-c
+ ›   li/build/commands/account/login.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/module-loader.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/help/index.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/errors/handle.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/errors/index.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/config/config.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/config/index.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/command.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@oclif/core/4.11.0/ae2ccc2
+ ›   47a763bbd79fe712ab6b1f7599a05d291a0e45c3b1e089a99812d0487/node_modules/@oc
+ ›   lif/core/lib/index.js
+ ›   - /Users/alanblake/Library/pnpm/store/v11/links/@/eas-cli/18.9.1/fc8bca1f5
+ ›   d350c1796b40349d96c3a04247dfd8b78681e3db94d35307b3c9a3b/node_modules/eas-c
+ ›   li/bin/run
+ ›   Code: MODULE_NOT_FOUND
