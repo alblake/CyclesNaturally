@@ -5,6 +5,12 @@ import {
   CycleEntry,
   CyclePrediction,
   DayInfo,
+  DEFAULT_CYCLE_LENGTH,
+  DEFAULT_PERIOD_LENGTH,
+  MAX_CYCLE_LENGTH,
+  MAX_PERIOD_LENGTH,
+  MIN_CYCLE_LENGTH,
+  MIN_PERIOD_LENGTH,
   TempEntries,
   getAverageCycleLength,
   getAveragePeriodLength,
@@ -15,12 +21,22 @@ import {
 
 const STORAGE_KEY = '@cycle_tracker_v1';
 const TEMP_STORAGE_KEY = '@cycle_tracker_temps_v1';
+const SETTINGS_STORAGE_KEY = '@cycle_tracker_settings_v1';
+
+interface CycleSettings {
+  userCycleLength: number;
+  userPeriodLength: number;
+}
 
 interface CycleContextType {
   cycles: CycleEntry[];
   isLoading: boolean;
   avgCycleLength: number;
   avgPeriodLength: number;
+  userCycleLength: number;
+  userPeriodLength: number;
+  setUserCycleLength: (n: number | ((prev: number) => number)) => void;
+  setUserPeriodLength: (n: number | ((prev: number) => number)) => void;
   prediction: CyclePrediction | null;
   activeCycle: CycleEntry | null;
   startPeriod: (date?: string) => void;
@@ -36,21 +52,49 @@ interface CycleContextType {
 
 const CycleContext = createContext<CycleContextType | null>(null);
 
+function clampInt(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min;
+  const r = Math.round(n);
+  return Math.max(min, Math.min(max, r));
+}
+
 export function CycleProvider({ children }: { children: React.ReactNode }) {
   const [cycles, setCycles] = useState<CycleEntry[]>([]);
   const [tempEntries, setTempEntries] = useState<TempEntries>({});
+  const [settings, setSettings] = useState<CycleSettings>({
+    userCycleLength: DEFAULT_CYCLE_LENGTH,
+    userPeriodLength: DEFAULT_PERIOD_LENGTH,
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       AsyncStorage.getItem(STORAGE_KEY),
       AsyncStorage.getItem(TEMP_STORAGE_KEY),
-    ]).then(([cyclesData, tempsData]) => {
+      AsyncStorage.getItem(SETTINGS_STORAGE_KEY),
+    ]).then(([cyclesData, tempsData, settingsData]) => {
       if (cyclesData) {
         try { setCycles(JSON.parse(cyclesData)); } catch {}
       }
       if (tempsData) {
         try { setTempEntries(JSON.parse(tempsData)); } catch {}
+      }
+      if (settingsData) {
+        try {
+          const parsed = JSON.parse(settingsData) as Partial<CycleSettings>;
+          setSettings({
+            userCycleLength: clampInt(
+              parsed.userCycleLength ?? DEFAULT_CYCLE_LENGTH,
+              MIN_CYCLE_LENGTH,
+              MAX_CYCLE_LENGTH,
+            ),
+            userPeriodLength: clampInt(
+              parsed.userPeriodLength ?? DEFAULT_PERIOD_LENGTH,
+              MIN_PERIOD_LENGTH,
+              MAX_PERIOD_LENGTH,
+            ),
+          });
+        } catch {}
       }
       setIsLoading(false);
     });
@@ -65,6 +109,36 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
     setTempEntries(updated);
     AsyncStorage.setItem(TEMP_STORAGE_KEY, JSON.stringify(updated));
   }, []);
+
+  const setUserCycleLength = useCallback(
+    (n: number | ((prev: number) => number)) => {
+      setSettings(prev => {
+        const value = typeof n === 'function' ? n(prev.userCycleLength) : n;
+        const next: CycleSettings = {
+          ...prev,
+          userCycleLength: clampInt(value, MIN_CYCLE_LENGTH, MAX_CYCLE_LENGTH),
+        };
+        AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    [],
+  );
+
+  const setUserPeriodLength = useCallback(
+    (n: number | ((prev: number) => number)) => {
+      setSettings(prev => {
+        const value = typeof n === 'function' ? n(prev.userPeriodLength) : n;
+        const next: CycleSettings = {
+          ...prev,
+          userPeriodLength: clampInt(value, MIN_PERIOD_LENGTH, MAX_PERIOD_LENGTH),
+        };
+        AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    [],
+  );
 
   const startPeriod = useCallback(
     (date?: string) => {
@@ -120,9 +194,9 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
     [tempEntries, persistTemps],
   );
 
-  const avgCycleLength = getAverageCycleLength(cycles);
-  const avgPeriodLength = getAveragePeriodLength(cycles);
-  const prediction = getCyclePredictions(cycles);
+  const avgCycleLength = getAverageCycleLength(cycles, settings.userCycleLength);
+  const avgPeriodLength = getAveragePeriodLength(cycles, settings.userPeriodLength);
+  const prediction = getCyclePredictions(cycles, avgCycleLength);
 
   const now = todayStr();
   const sortedCycles = [...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate));
@@ -142,6 +216,10 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         avgCycleLength,
         avgPeriodLength,
+        userCycleLength: settings.userCycleLength,
+        userPeriodLength: settings.userPeriodLength,
+        setUserCycleLength,
+        setUserPeriodLength,
         prediction,
         activeCycle,
         startPeriod,

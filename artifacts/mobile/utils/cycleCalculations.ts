@@ -32,27 +32,40 @@ export function diffDays(a: string, b: string): number {
   return Math.round((da.getTime() - db.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function getAverageCycleLength(cycles: CycleEntry[]): number {
-  if (cycles.length < 2) return 28;
+export const DEFAULT_CYCLE_LENGTH = 28;
+export const DEFAULT_PERIOD_LENGTH = 5;
+export const MIN_CYCLE_LENGTH = 20;
+export const MAX_CYCLE_LENGTH = 45;
+export const MIN_PERIOD_LENGTH = 2;
+export const MAX_PERIOD_LENGTH = 10;
+
+export function getAverageCycleLength(
+  cycles: CycleEntry[],
+  fallback: number = DEFAULT_CYCLE_LENGTH,
+): number {
+  if (cycles.length < 2) return fallback;
   const sorted = [...cycles].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const lengths: number[] = [];
   for (let i = 1; i < sorted.length; i++) {
     const len = diffDays(sorted[i].startDate, sorted[i - 1].startDate);
-    if (len >= 15 && len <= 45) lengths.push(len);
+    if (len >= MIN_CYCLE_LENGTH && len <= MAX_CYCLE_LENGTH) lengths.push(len);
   }
   const recent = lengths.slice(-3);
-  if (recent.length === 0) return 28;
+  if (recent.length === 0) return fallback;
   return Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
 }
 
-export function getAveragePeriodLength(cycles: CycleEntry[]): number {
+export function getAveragePeriodLength(
+  cycles: CycleEntry[],
+  fallback: number = DEFAULT_PERIOD_LENGTH,
+): number {
   const withEnd = cycles.filter(c => c.endDate);
-  if (withEnd.length === 0) return 5;
+  if (withEnd.length === 0) return fallback;
   const lengths = withEnd
     .map(c => diffDays(c.endDate!, c.startDate) + 1)
-    .filter(l => l >= 1 && l <= 14);
+    .filter(l => l >= MIN_PERIOD_LENGTH && l <= MAX_PERIOD_LENGTH);
   const recent = lengths.slice(-3);
-  if (recent.length === 0) return 5;
+  if (recent.length === 0) return fallback;
   return Math.round(recent.reduce((a, b) => a + b, 0) / recent.length);
 }
 
@@ -66,11 +79,14 @@ export interface CyclePrediction {
   daysUntilOvulation: number | null;
 }
 
-export function getCyclePredictions(cycles: CycleEntry[]): CyclePrediction | null {
+export function getCyclePredictions(
+  cycles: CycleEntry[],
+  cycleLengthOverride?: number,
+): CyclePrediction | null {
   if (cycles.length === 0) return null;
   const sorted = [...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate));
   const lastCycle = sorted[0];
-  const avgLength = getAverageCycleLength(cycles);
+  const avgLength = cycleLengthOverride ?? getAverageCycleLength(cycles);
 
   const nextPeriodStart = addDays(lastCycle.startDate, avgLength);
   const ovulationDate = addDays(lastCycle.startDate, avgLength - 14);

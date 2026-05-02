@@ -14,7 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCycle } from '@/context/CycleContext';
 import { useColors } from '@/hooks/useColors';
-import { parseLocalDate, todayStr } from '@/utils/cycleCalculations';
+import {
+  MAX_CYCLE_LENGTH,
+  MAX_PERIOD_LENGTH,
+  MIN_CYCLE_LENGTH,
+  MIN_PERIOD_LENGTH,
+  parseLocalDate,
+  todayStr,
+} from '@/utils/cycleCalculations';
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -40,7 +47,20 @@ export default function LogScreen() {
     tempEntries,
     setTemp,
     removeTemp,
+    userCycleLength,
+    userPeriodLength,
+    setUserCycleLength,
+    setUserPeriodLength,
   } = useCycle();
+
+  const adjustCycleLen = (delta: number) => {
+    Haptics.selectionAsync();
+    setUserCycleLength(prev => prev + delta);
+  };
+  const adjustPeriodLen = (delta: number) => {
+    Haptics.selectionAsync();
+    setUserPeriodLength(prev => prev + delta);
+  };
 
   const today = todayStr();
   const todayTemp = tempEntries[today];
@@ -337,6 +357,47 @@ export default function LogScreen() {
         </View>
       )}
 
+      {/* Cycle settings card */}
+      <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.settingsHeader}>
+          <Text style={[styles.tempLabel, { color: colors.mutedForeground }]}>
+            CYCLE SETTINGS
+          </Text>
+          <Text style={[styles.tempTitle, { color: colors.foreground }]}>
+            Your typical cycle
+          </Text>
+          <Text style={[styles.settingsSubtitle, { color: colors.mutedForeground }]}>
+            {cycles.length >= 2
+              ? 'Predictions are now based on your logged cycles \u2014 these settings only apply until enough data is recorded.'
+              : 'Adjust these so predictions match your body. We\u2019ll learn from your logs over time.'}
+          </Text>
+        </View>
+
+        <SettingStepper
+          label="Cycle length"
+          unit="days"
+          value={userCycleLength}
+          min={MIN_CYCLE_LENGTH}
+          max={MAX_CYCLE_LENGTH}
+          onDec={() => adjustCycleLen(-1)}
+          onInc={() => adjustCycleLen(1)}
+          colors={colors}
+        />
+
+        <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 4 }]} />
+
+        <SettingStepper
+          label="Period length"
+          unit="days"
+          value={userPeriodLength}
+          min={MIN_PERIOD_LENGTH}
+          max={MAX_PERIOD_LENGTH}
+          onDec={() => adjustPeriodLen(-1)}
+          onInc={() => adjustPeriodLen(1)}
+          colors={colors}
+        />
+      </View>
+
       {sortedCycles.length > 0 && (
         <View style={styles.historySection}>
           <Text style={[styles.sectionTitle, { color: colors.foreground, paddingHorizontal: 20 }]}>
@@ -376,6 +437,67 @@ export default function LogScreen() {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+function SettingStepper({
+  label,
+  unit,
+  value,
+  min,
+  max,
+  onDec,
+  onInc,
+  colors,
+}: {
+  label: string;
+  unit: string;
+  value: number;
+  min: number;
+  max: number;
+  onDec: () => void;
+  onInc: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const atMin = value <= min;
+  const atMax = value >= max;
+  return (
+    <View style={styles.settingRow}>
+      <View style={styles.settingInfo}>
+        <Text style={[styles.settingLabel, { color: colors.foreground }]}>{label}</Text>
+        <Text style={[styles.settingHint, { color: colors.mutedForeground }]}>
+          {`${min}\u2013${max} ${unit}`}
+        </Text>
+      </View>
+      <View style={styles.settingStepper}>
+        <TouchableOpacity
+          style={[
+            styles.smallStepperBtn,
+            { backgroundColor: colors.secondary, opacity: atMin ? 0.4 : 1 },
+          ]}
+          onPress={onDec}
+          disabled={atMin}
+          activeOpacity={0.7}
+        >
+          <Feather name="minus" size={16} color={colors.foreground} />
+        </TouchableOpacity>
+        <View style={styles.settingValueWrap}>
+          <Text style={[styles.settingValue, { color: colors.foreground }]}>{value}</Text>
+          <Text style={[styles.settingUnit, { color: colors.mutedForeground }]}>{unit}</Text>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.smallStepperBtn,
+            { backgroundColor: colors.secondary, opacity: atMax ? 0.4 : 1 },
+          ]}
+          onPress={onInc}
+          disabled={atMax}
+          activeOpacity={0.7}
+        >
+          <Feather name="plus" size={16} color={colors.foreground} />
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -619,6 +741,63 @@ const styles = StyleSheet.create({
   predBadgeText: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
+  },
+  settingsCard: {
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    gap: 14,
+    marginBottom: 16,
+  },
+  settingsHeader: { gap: 4 },
+  settingsSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  settingInfo: { flex: 1 },
+  settingLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+  },
+  settingHint: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
+  settingStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  smallStepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 3,
+    minWidth: 56,
+    justifyContent: 'center',
+  },
+  settingValue: {
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+  },
+  settingUnit: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
   },
   historySection: { gap: 8 },
   historyItem: {
