@@ -1,0 +1,39 @@
+✔ Is this what you want to register? … yes
+✔ Registering Apple device on EAS
+alanblake@Minis-Mac-mini mobile % eas build --profile development --platform ios
+✔ Generated eas.json. Learn more: https://docs.expo.dev/build-reference/eas-json/
+
+You want to build a development client build for platforms: iOS
+However, we detected that you don't have expo-dev-client installed for your project.
+✔ Do you want EAS CLI to install expo-dev-client for you? … yes
+
+Running expo install expo-dev-client
+
+[expo-cli] › Installing 1 SDK 54.0.0 compatible native module using pnpm
+[expo-cli] > pnpm add expo-dev-client@~6.0.21
+[expo-cli] ../..                                    | Progress: resolved 1, reused 0, downloaded 0, added 0
+[expo-cli] ../..                                    | Progress: resolved 1087, reused 0, downloaded 0, added 0
+[expo-cli] WARN  7 deprecated subdependencies found: @xmldom/xmldom@0.7.13, glob@7.1.6, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2, uuid@3.4.0, uuid@7.0.3
+[expo-cli] ../..                                    | Progress: resolved 1087, reused 0, downloaded 0, added 0, done
+[expo-cli] dependencies:
+[expo-cli] + expo-dev-client ~6.0.21
+[expo-cli] ../..                                    |   +7 +
+[expo-cli] ../.. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+[expo-cli] ../.. preinstall: Use pnpm instead
+[expo-cli] ../.. preinstall: Failed
+[expo-cli] ELIFECYCLE  Command failed with exit code 1.
+[expo-cli] Error: pnpm add expo-dev-client@~6.0.21 exited with non-zero code: 1
+[expo-cli] Error: pnpm add expo-dev-client@~6.0.21 exited with non-zero code: 1
+[expo-cli]     at ChildProcess.completionListener (/Users/alanblake/dev/CyclesNaturally/node_modules/.pnpm/@expo+spawn-async@1.7.2/node_modules/@expo/spawn-async/build/spawnAsync.js:42:23)
+[expo-cli]     at Object.onceWrapper (node:events:622:26)
+[expo-cli]     at ChildProcess.emit (node:events:507:28)
+[expo-cli]     at maybeClose (node:internal/child_process:1101:16)
+[expo-cli]     at ChildProcess._handle.onexit (node:internal/child_process:305:5)
+[expo-cli]     ...
+[expo-cli]     at spawnAsync (/Users/alanblake/dev/CyclesNaturally/node_modules/.pnpm/@expo+spawn-async@1.7.2/node_modules/@expo/spawn-async/build/spawnAsync.js:7:23)
+[expo-cli]     at PnpmPackageManager.runAsync (/Users/alanblake/dev/CyclesNaturally/node_modules/.pnpm/@expo+package-manager@1.10.4/node_modules/@expo/package-manager/build/node/BasePackageManager.js:41:42)
+[expo-cli]     at PnpmPackageManager.addAsync (/Users/alanblake/dev/CyclesNaturally/node_modules/.pnpm/@expo+package-manager@1.10.4/node_modules/@expo/package-manager/build/node/PnpmPackageManager.js:36:21)
+[expo-cli]     at installPackagesAsync (/Users/alanblake/dev/CyclesNaturally/node_modules/.pnpm/@expo+cli@54.0.24_expo-router@6.0.23_expo@54.0.34_react-native@0.81.5_@babel+core@7.29._a5b3c719bb5ccdac93692d80fc3c093b/node_modules/@expo/cli/build/src/install/installAsync.js:189:30)
+[expo-cli]     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+/Users/alanblake/dev/CyclesNaturally/node_modules/.pnpm/expo@54.0.34_@babel+core@7.29.0_@expo+metro-runtime@6.1.2_expo-router@6.0.23_react-nati_3cc7b2874fa1147af8a667959c900031/node_modules/expo/bin/cli install expo-dev-client exited with non-zero code: 1
+    Error: build command failed.
