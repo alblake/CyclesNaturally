@@ -1,16 +1,18 @@
-import React from 'react';
+import { Feather } from '@expo/vector-icons';
+import React, { useMemo } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { InsightCard } from '@/components/InsightCard';
+import { TemperatureChart } from '@/components/TemperatureChart';
 import { useCycle } from '@/context/CycleContext';
 import { useColors } from '@/hooks/useColors';
-import { diffDays } from '@/utils/cycleCalculations';
+import { analyzeTemps, diffDays } from '@/utils/cycleCalculations';
 
 export default function InsightsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { cycles, avgCycleLength, avgPeriodLength, prediction } = useCycle();
+  const { cycles, avgCycleLength, avgPeriodLength, prediction, tempEntries } = useCycle();
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -26,6 +28,12 @@ export default function InsightsScreen() {
 
   const daysUntilPeriod = prediction?.daysUntilNextPeriod ?? null;
   const daysUntilOvulation = prediction?.daysUntilOvulation ?? null;
+
+  const tempCount = Object.keys(tempEntries).length;
+  const tempAnalysis = useMemo(
+    () => analyzeTemps(tempEntries, prediction),
+    [tempEntries, prediction],
+  );
 
   return (
     <ScrollView
@@ -98,6 +106,92 @@ export default function InsightsScreen() {
                 />
               </View>
             )}
+          </View>
+
+          {/* BBT chart */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.cardHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.cardLabel, { color: colors.primary }]}>
+                  BASAL BODY TEMPERATURE
+                </Text>
+                <Text style={[styles.cardTitle, { color: colors.foreground, marginTop: 2 }]}>
+                  Last 30 days
+                </Text>
+              </View>
+              {tempCount > 0 && (
+                <View style={[styles.countBadge, { backgroundColor: colors.muted + '60' }]}>
+                  <Text style={[styles.countBadgeText, { color: colors.foreground }]}>
+                    {tempCount} {tempCount === 1 ? 'reading' : 'readings'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <TemperatureChart numDays={30} />
+
+            {tempCount > 0 && (
+              <View style={styles.legendRow}>
+                <LegendDot color={colors.primary} label="Temperature" />
+                <LegendDot color={colors.ovulation} label="Ovulation" dashed />
+                {tempAnalysis.coverline !== null && (
+                  <LegendDot color={colors.accent} label="Coverline" dashed />
+                )}
+              </View>
+            )}
+
+            {tempAnalysis.thermalShiftConfirmed && tempAnalysis.shiftConfirmedDate && (
+              <View
+                style={[
+                  styles.confirmBox,
+                  {
+                    backgroundColor: colors.fertile + '15',
+                    borderColor: colors.fertile + '40',
+                  },
+                ]}
+              >
+                <Feather name="check-circle" size={16} color={colors.fertile} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.confirmTitle, { color: colors.fertile }]}>
+                    Ovulation confirmed
+                  </Text>
+                  <Text style={[styles.confirmText, { color: colors.mutedForeground }]}>
+                    Three sustained days above coverline starting{' '}
+                    {tempAnalysis.shiftConfirmedDate}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {tempAnalysis.preOvAvg !== null && tempAnalysis.postOvAvg !== null && (
+              <View style={styles.tempStatsRow}>
+                <TempStat
+                  label="Pre-ovulation"
+                  value={`${tempAnalysis.preOvAvg.toFixed(2)}°F`}
+                  color={colors.mutedForeground}
+                />
+                <TempStat
+                  label="Post-ovulation"
+                  value={`${tempAnalysis.postOvAvg.toFixed(2)}°F`}
+                  color={colors.accent}
+                />
+                <TempStat
+                  label="Shift"
+                  value={`+${(tempAnalysis.postOvAvg - tempAnalysis.preOvAvg).toFixed(2)}°F`}
+                  color={colors.ovulation}
+                />
+              </View>
+            )}
+
+            <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
+              Body temperature rises 0.4–0.6°F after ovulation due to progesterone. A sustained
+              shift above your coverline confirms ovulation occurred.
+            </Text>
           </View>
 
           {cycleLengths.length >= 2 && (
@@ -200,6 +294,38 @@ export default function InsightsScreen() {
   );
 }
 
+function LegendDot({
+  color,
+  label,
+  dashed,
+}: {
+  color: string;
+  label: string;
+  dashed?: boolean;
+}) {
+  const colors = useColors();
+  return (
+    <View style={styles.legendItem}>
+      {dashed ? (
+        <View style={[styles.legendLine, { borderColor: color }]} />
+      ) : (
+        <View style={[styles.legendDot, { backgroundColor: color }]} />
+      )}
+      <Text style={[styles.legendLabel, { color: colors.mutedForeground }]}>{label}</Text>
+    </View>
+  );
+}
+
+function TempStat({ label, value, color }: { label: string; value: string; color: string }) {
+  const colors = useColors();
+  return (
+    <View style={styles.tempStat}>
+      <Text style={[styles.tempStatLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.tempStatValue, { color }]}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   screenTitle: {
@@ -236,7 +362,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     marginBottom: 12,
-    gap: 10,
+    gap: 12,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -246,6 +372,21 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontFamily: 'Inter_600SemiBold',
+  },
+  cardLabel: {
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  countBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
   },
   badge: {
     paddingHorizontal: 12,
@@ -282,11 +423,66 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Inter_400Regular',
   },
-  cardLabel: {
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginTop: 4,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendLine: {
+    width: 14,
+    height: 0,
+    borderTopWidth: 2,
+    borderStyle: 'dashed',
+  },
+  legendLabel: {
     fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  confirmBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  confirmTitle: {
+    fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+  },
+  confirmText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
+  tempStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  tempStat: {
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  tempStatLabel: {
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
+  },
+  tempStatValue: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
   },
   fertileRange: {
     fontSize: 22,

@@ -145,3 +145,96 @@ export function getDayInfo(
 
   return { status: 'normal', cycleDay: null, isPast, isToday, isFuture };
 }
+
+export type TempEntries = Record<string, number>;
+
+export interface TempAnalysis {
+  coverline: number | null;
+  thermalShiftConfirmed: boolean;
+  shiftConfirmedDate: string | null;
+  preOvAvg: number | null;
+  postOvAvg: number | null;
+}
+
+export function getCoverline(
+  temps: TempEntries,
+  prediction: CyclePrediction | null,
+): number | null {
+  if (!prediction) return null;
+  const startDate = addDays(prediction.ovulationDate, -10);
+  const endDate = addDays(prediction.ovulationDate, -1);
+  const preOv: number[] = [];
+  let cur = startDate;
+  while (cur <= endDate) {
+    if (temps[cur] !== undefined) preOv.push(temps[cur]);
+    cur = addDays(cur, 1);
+  }
+  if (preOv.length < 4) return null;
+  preOv.sort((a, b) => a - b);
+  const lowest = preOv.slice(0, 6);
+  const avg = lowest.reduce((a, b) => a + b, 0) / lowest.length;
+  return Math.round((avg + 0.2) * 100) / 100;
+}
+
+export function analyzeTemps(
+  temps: TempEntries,
+  prediction: CyclePrediction | null,
+): TempAnalysis {
+  const coverline = getCoverline(temps, prediction);
+  let thermalShiftConfirmed = false;
+  let shiftConfirmedDate: string | null = null;
+  let preOvAvg: number | null = null;
+  let postOvAvg: number | null = null;
+
+  if (prediction && coverline !== null) {
+    // 3 consecutive days above coverline starting from ovulation prediction onward
+    let consecutive = 0;
+    let firstAbove: string | null = null;
+    let cur = prediction.ovulationDate;
+    const today = todayStr();
+    while (cur <= today) {
+      const t = temps[cur];
+      if (t !== undefined && t > coverline) {
+        if (consecutive === 0) firstAbove = cur;
+        consecutive++;
+        if (consecutive >= 3 && !thermalShiftConfirmed) {
+          thermalShiftConfirmed = true;
+          shiftConfirmedDate = firstAbove;
+        }
+      } else if (t !== undefined) {
+        consecutive = 0;
+        firstAbove = null;
+      }
+      cur = addDays(cur, 1);
+    }
+  }
+
+  if (prediction) {
+    const preStart = addDays(prediction.ovulationDate, -10);
+    const preEnd = addDays(prediction.ovulationDate, -1);
+    const postStart = addDays(prediction.ovulationDate, 1);
+    const postEnd = todayStr();
+
+    const preTemps: number[] = [];
+    let cur = preStart;
+    while (cur <= preEnd) {
+      if (temps[cur] !== undefined) preTemps.push(temps[cur]);
+      cur = addDays(cur, 1);
+    }
+    if (preTemps.length > 0) {
+      preOvAvg = Math.round((preTemps.reduce((a, b) => a + b, 0) / preTemps.length) * 100) / 100;
+    }
+
+    const postTemps: number[] = [];
+    cur = postStart;
+    while (cur <= postEnd) {
+      if (temps[cur] !== undefined) postTemps.push(temps[cur]);
+      cur = addDays(cur, 1);
+    }
+    if (postTemps.length > 0) {
+      postOvAvg = Math.round((postTemps.reduce((a, b) => a + b, 0) / postTemps.length) * 100) / 100;
+    }
+  }
+
+  return { coverline, thermalShiftConfirmed, shiftConfirmedDate, preOvAvg, postOvAvg };
+}

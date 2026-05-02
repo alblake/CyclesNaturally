@@ -5,6 +5,7 @@ import {
   CycleEntry,
   CyclePrediction,
   DayInfo,
+  TempEntries,
   getAverageCycleLength,
   getAveragePeriodLength,
   getCyclePredictions,
@@ -13,6 +14,7 @@ import {
 } from '@/utils/cycleCalculations';
 
 const STORAGE_KEY = '@cycle_tracker_v1';
+const TEMP_STORAGE_KEY = '@cycle_tracker_temps_v1';
 
 interface CycleContextType {
   cycles: CycleEntry[];
@@ -25,37 +27,51 @@ interface CycleContextType {
   endPeriod: (date?: string) => void;
   deleteCycle: (id: string) => void;
   getDayInfo: (dateStr: string) => DayInfo;
+
+  tempEntries: TempEntries;
+  setTemp: (date: string, tempF: number) => void;
+  removeTemp: (date: string) => void;
 }
 
 const CycleContext = createContext<CycleContextType | null>(null);
 
 export function CycleProvider({ children }: { children: React.ReactNode }) {
   const [cycles, setCycles] = useState<CycleEntry[]>([]);
+  const [tempEntries, setTempEntries] = useState<TempEntries>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then(data => {
-      if (data) {
-        try {
-          setCycles(JSON.parse(data));
-        } catch {}
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(TEMP_STORAGE_KEY),
+    ]).then(([cyclesData, tempsData]) => {
+      if (cyclesData) {
+        try { setCycles(JSON.parse(cyclesData)); } catch {}
+      }
+      if (tempsData) {
+        try { setTempEntries(JSON.parse(tempsData)); } catch {}
       }
       setIsLoading(false);
     });
   }, []);
 
-  const persist = useCallback((updated: CycleEntry[]) => {
+  const persistCycles = useCallback((updated: CycleEntry[]) => {
     setCycles(updated);
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  }, []);
+
+  const persistTemps = useCallback((updated: TempEntries) => {
+    setTempEntries(updated);
+    AsyncStorage.setItem(TEMP_STORAGE_KEY, JSON.stringify(updated));
   }, []);
 
   const startPeriod = useCallback(
     (date?: string) => {
       const startDate = date || todayStr();
       const id = Date.now().toString() + Math.random().toString(36).substr(2, 6);
-      persist([...cycles, { id, startDate }]);
+      persistCycles([...cycles, { id, startDate }]);
     },
-    [cycles, persist],
+    [cycles, persistCycles],
   );
 
   const endPeriod = useCallback(
@@ -65,16 +81,32 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
       const sorted = [...cycles].sort((a, b) => b.startDate.localeCompare(a.startDate));
       const active = sorted.find(c => !c.endDate && c.startDate <= now);
       if (!active) return;
-      persist(cycles.map(c => (c.id === active.id ? { ...c, endDate } : c)));
+      persistCycles(cycles.map(c => (c.id === active.id ? { ...c, endDate } : c)));
     },
-    [cycles, persist],
+    [cycles, persistCycles],
   );
 
   const deleteCycle = useCallback(
     (id: string) => {
-      persist(cycles.filter(c => c.id !== id));
+      persistCycles(cycles.filter(c => c.id !== id));
     },
-    [cycles, persist],
+    [cycles, persistCycles],
+  );
+
+  const setTemp = useCallback(
+    (date: string, tempF: number) => {
+      persistTemps({ ...tempEntries, [date]: tempF });
+    },
+    [tempEntries, persistTemps],
+  );
+
+  const removeTemp = useCallback(
+    (date: string) => {
+      const next = { ...tempEntries };
+      delete next[date];
+      persistTemps(next);
+    },
+    [tempEntries, persistTemps],
   );
 
   const avgCycleLength = getAverageCycleLength(cycles);
@@ -105,6 +137,9 @@ export function CycleProvider({ children }: { children: React.ReactNode }) {
         endPeriod,
         deleteCycle,
         getDayInfo: getDayInfoFn,
+        tempEntries,
+        setTemp,
+        removeTemp,
       }}
     >
       {children}
