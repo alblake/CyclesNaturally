@@ -26,7 +26,14 @@
     },
     "android": {},
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "Cycle Tracker",
+      "shortName": "Cycle",
+      "themeColor": "#E8748A",
+      "backgroundColor": "#ffffff",
+      "description": "Personal cycle and ovulation tracker"
     },
     "plugins": [
       [

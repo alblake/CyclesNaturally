@@ -86,6 +86,7 @@ function prepareDirectories(timestamp) {
     path.join(staticBuild, timestamp, "_expo", "static", "js", "android"),
     path.join(staticBuild, "ios"),
     path.join(staticBuild, "android"),
+    path.join(staticBuild, "web"),
   ];
 
   for (const dir of dirs) {
@@ -93,6 +94,53 @@ function prepareDirectories(timestamp) {
   }
 
   console.log("Build:", timestamp);
+}
+
+async function buildWebExport() {
+  console.log("Building web export (PWA)...");
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(
+      "pnpm",
+      [
+        "exec",
+        "expo",
+        "export",
+        "--platform",
+        "web",
+        "--output-dir",
+        path.join("static-build", "web"),
+      ],
+      {
+        cwd: projectRoot,
+        env: { ...process.env, CI: "1" },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+
+    if (proc.stdout) {
+      proc.stdout.on("data", (d) => {
+        const s = d.toString().trim();
+        if (s) console.log(`[Web Export] ${s}`);
+      });
+    }
+    if (proc.stderr) {
+      proc.stderr.on("data", (d) => {
+        const s = d.toString().trim();
+        if (s) console.error(`[Web Export] ${s}`);
+      });
+    }
+
+    proc.on("close", (code) => {
+      if (code === 0) {
+        console.log("Web export complete");
+        resolve();
+      } else {
+        reject(new Error(`Web export failed with exit code ${code}`));
+      }
+    });
+    proc.on("error", reject);
+  });
 }
 
 function clearMetroCache() {
@@ -517,6 +565,9 @@ async function main() {
 
   prepareDirectories(timestamp);
   clearMetroCache();
+
+  // Build web PWA first (uses its own Metro instance internally)
+  await buildWebExport();
 
   await startMetro(domain, expoPublicReplId);
 
